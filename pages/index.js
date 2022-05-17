@@ -26,6 +26,10 @@ export default function Home() {
             <h2>Pin Lock Contract &rarr;</h2>
             <p>dApp based on ergoscript-by-example pin lock contract</p>
           </a>
+          <a href="/refundable-ico" className={styles.card}>
+            <h2>Refundable ICO Contract &rarr;</h2>
+            <p>dApp based on $COMET's Refundable ICO contract</p>
+          </a>
         </div>
       </main>
 
