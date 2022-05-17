@@ -23,7 +23,7 @@ import { get } from '../src/lib/rest';
 import styles from '../styles/Home.module.css';
 import ErgoScriptEditor from './components/ErgoScriptEditor';
 import TransactionPreviewModal from './components/TransactionPreviewModal';
-import { do_swap } from '../src/lib/yoroiUtils';
+import { do_swap, do_refund } from '../src/lib/yoroiUtils';
 
 
 
@@ -212,9 +212,12 @@ export default function Send() {
 
       <div className="step-section" data-title="1) Choose how much you want to refund">
       
-        <Input width={200} />
+        <Input placeholder="Refund"  id="Refund" width={200} />
         <Button
-         
+         onClick={() => {
+                      
+          do_refund(document.getElementById("Refund").value);
+        }}
           width="200px"
    
           colorScheme="blue"

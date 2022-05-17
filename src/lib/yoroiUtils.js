@@ -342,3 +342,142 @@ export async function do_swap(price){
   return await signTx(transaction_to_sign)
 
 }
+
+export async function do_refund(cometIn){
+  cometIn = parseInt(cometIn/3)*3
+  let ergValue = 100000*cometIn/15
+  console.log(cometIn)
+
+  const wasm = await ergolib
+  const user = await ergo.get_change_address()
+  const blockHeight = await currentBlock();
+
+
+  const p2s = "KNcyFMHkYdLH89uhYKL3FTAf9rJ3iHAE99Kn4UHAiy3BEjpo6RxxSWMhuzgxSWksuv4Rz7qkUyqaLNtRfQoHQ64MQD2QAz3XQE9QpjZDf7XXAcBa5wdxAGqapYk39hmhtEB8VqKUD5ouiotAuAKd9PmeiaddTz2Yo1C9rjKghpZU1G6obLzJhYgwwCa4TavW2WunBnZQCDSDS7aWzKNL4RYhNR4bZHPyFEJDWGGy3b5kzvqFnsQS5y8muz8AfbqU26xWUknTxcgyFnb9ongJZKEEx5RnuEXzyW8hreGQSvB95P5mN6LgxJTDn66rM3wmrVWbFYgdo2KihyUCgLC18Goig7TSFG9g9CC497A8yGFhrBDhSa1psE21mDxc4SkoTsqGbw8SFZTMmR5d7eW1eva9pW11hbW8YgWRDgYajEyYyGG6btDRJbXPLRwpnT9s3HtiSPu19w88Xp8ixL4a1yMh16z4j4d49b17G9rZCn6cHrdvibibjjKSv1uMuZk18dUzWFj7Cg9pph8hQF4DYyfQS5xNFjdMpBMSaA4KjwqzpkKf8rr2yDNZGP6qAnSzaHxmDZMGbA4oe2XcWSKaTyEGiEj9AARnpxzoyRMJghw3FXwMcD8f8yBSfAiAJbAkMtuETFXQZvCs1Dpev1jCruGwNBV"
+
+  // await setupYoroi()
+  let need = {ERG: 1000000}
+  need['3fa9e93e0f4c15a18354db818a9a2401d06d551ca2d939ea012f4cf7c69c1d00'] = cometIn
+  need['0cd8c9f416e5b1ca9f986a7f10a84191dfb85941619e49e53c0dc30ebf83324b'] = cometIn
+  let have = JSON.parse(JSON.stringify(need))
+  let ins = []
+  const keys = Object.keys(have)
+
+  const allBal = await getYoroiTokens()
+  if (keys.filter(key => key !== 'ERG').filter(key => !Object.keys(allBal).includes(key) || allBal[key].amount < have[key]).length > 0) {
+      showMsg('Not enough balance in the wallet! ', true)
+      return
+  }
+
+  for (let i = 0; i < keys.length; i++) {
+      if (have[keys[i]] <= 0) continue
+      const curIns = await ergo.get_utxos(have[keys[i]].toString(), keys[i]);
+      if (curIns !== undefined) {
+          curIns.forEach(bx => {
+              have['ERG'] -= parseInt(bx.value)
+              bx.assets.forEach(ass => {
+                  if (!Object.keys(have).includes(ass.tokenId)) have[ass.tokenId] = 0
+                  have[ass.tokenId] -= parseInt(ass.amount)
+              })
+          })
+          ins = ins.concat(curIns)
+      }
+  }
+  if (keys.filter(key => have[key] > 0).length > 0) {
+      showMsg('Not enough balance in the wallet! ', true)
+      return
+  }
+  let swapBoxResp = await axios.get(`https://api.ergoplatform.com/api/v1/boxes/unspent/byAddress/`+p2s).catch((err) => {
+      console.log("Error when calling explorer");
+      showMsg('Explorer response failed, please try again.')
+  })
+  let tempBox = swapBoxResp.data.items[Math.floor(Math.random() * 18)]
+  let swapBox
+
+  if (tempBox.value - txFee < ergValue) {
+      let box
+      for (box of swapBoxResp.data.items){
+          if (box.value - txFee > ergValue){
+              swapBox = JSON.parse(JSON.stringify(box));
+              break // This is so we dont keep to loop through after we found a box that works.
+
+          }
+      }
+  }
+  else {
+      swapBox = JSON.parse(JSON.stringify(tempBox));
+
+  }
+  console.log("swapBox", swapBox)
+  if (swapBox === undefined) {
+      showMsg('Failure to find contract with enough funds for your request! Try a smaller swap.! ', true)
+      return
+  }
+
+  // -----------Output boxes--------------
+  let registers = {
+      R4: await encodeHex(swapBox.boxId),
+  };
+
+  console.log("ergValue", ergValue)
+  const swapBoxOutput = {
+      value: swapBox.value - ergValue,
+      ergoTree: wasm.Address.from_mainnet_str(p2s).to_ergo_tree().to_base16_bytes(), // p2s to ergotree (can do through node or wasm)
+      assets: [
+          {
+              tokenId: swapBox.assets[0].tokenId ,
+              amount: (BigInt(swapBox.assets[0].amount) + BigInt(cometIn)).toString()
+          },
+          {
+              tokenId: swapBox.assets[1].tokenId,
+              amount: swapBox.assets[1].amount + cometIn
+          }
+      ],
+      additionalRegisters: registers,
+      creationHeight: blockHeight.height
+  }
+
+
+  const feeBox = {
+      value: txFee.toString(),
+      creationHeight: blockHeight.height,
+      ergoTree: "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304",
+      assets: [],
+      additionalRegisters: {},
+  }
+
+  const inputList = ins.map(curIn => {
+      return {
+          ...curIn,
+          extension: {}
+      } // this gets all user eutxo boxes
+  })
+  swapBox.extension = {}
+
+  const inputBoxes = inputList.concat(swapBox)
+
+  let changeBox = {
+      value: (-have['ERG']+ergValue).toString(),
+      ergoTree: wasm.Address.from_mainnet_str(user).to_ergo_tree().to_base16_bytes(),
+      assets: Object.keys(have).filter(key => key !== 'ERG')
+          .filter(key => have[key] < 0)
+          .map(key => {
+              return {
+                  tokenId: key,
+                  amount: (-have[key]).toString()
+              }
+          }),
+      additionalRegisters: {},
+      creationHeight: blockHeight.height
+  }
+
+  const transaction_to_sign = {
+      inputs: inputBoxes,
+      outputs: [swapBoxOutput, changeBox, feeBox],
+      dataInputs: [],
+      fee: txFee
+  }
+
+  return await signTx(transaction_to_sign)
+
+}
