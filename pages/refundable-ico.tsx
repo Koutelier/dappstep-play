@@ -2,23 +2,18 @@ import {
   Button,
   Stack,
   Heading,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Box,
   Flex,
   Input,
   useDisclosure,
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { Address, minBoxValue } from '@coinbarn/ergo-ts';
-import { blake2b256 } from '@multiformats/blake2/blake2b';
+import { Address } from '@coinbarn/ergo-ts';
 import { Serializer } from '@coinbarn/ergo-ts/dist/serializer';
-import { sendToken, loadTokensFromWallet } from '../src/services/GenerateSendFundsTx';
+import { loadTokensFromWallet } from '../src/services/GenerateSendFundsTx';
 import { sendFunds } from '../src/services/Transaction';
 import { checkTx, p2sNode } from '../src/services/helpers';
-import { encodeHex, encodeLongTuple, encodeNum, encodeByteArray } from '../src/lib/serializer';
+import { encodeHex } from '../src/lib/serializer';
 import { get } from '../src/lib/rest';
 import styles from '../styles/Home.module.css';
 import ErgoScriptEditor from './components/ErgoScriptEditor';
